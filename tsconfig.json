@@ -16,8 +16,8 @@
         "alwaysStrict": true, // pass
         "noImplicitThis": true, // pass
         "strictFunctionTypes": true, // pass
-        "strictNullChecks": false,
-        "strictPropertyInitialization": false,
+        "strictNullChecks": true,
+        "strictPropertyInitialization": true,
         "outDir": "dist",
         "jsx": "react",
         "rootDir": "src",
