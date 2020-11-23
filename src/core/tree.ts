@@ -1,8 +1,9 @@
+import { CompositeDisposable, IDisposable } from "./lifecycle";
 import { IList, List } from "./list";
 import { ITreeNode } from "./treeModel";
 import { ITreeModel, TreeModel, ITreeElement } from "./treeModel";
 
-export interface ITree<T> {
+export interface ITree<T> extends IDisposable {
   readonly size: number;
   readonly list: IList<ITreeNode<T>>;
   readonly model: ITreeModel<T>;
@@ -22,6 +23,7 @@ export interface IdentityProvider<T> {
 }
 
 export class Tree<T extends Exclude<any, undefined>> implements ITree<T> {
+  private _disposable: IDisposable;
   private _list: List<ITreeNode<T>>;
   private _model: ITreeModel<T | null>;
   private _nodes = new Map<T | null, ITreeNode<T>>();
@@ -58,11 +60,20 @@ export class Tree<T extends Exclude<any, undefined>> implements ITree<T> {
     this._list = new List();
     this._model = new TreeModel(this._list, null, {
       collapseByDefault: false,
+      autoExpandSingleChildren: true,
     });
 
-    this._model.onDidFilterChange(() => {
-      this.rerender();
-    });
+    this._disposable = new CompositeDisposable(
+      this._model.onDidFilterChange(() => {
+        this.rerender();
+      })
+    );
+  }
+
+  dispose() {
+    this._disposable.dispose();
+    this._model.dispose();
+    this._list.dispose();
   }
 
   rerender() {

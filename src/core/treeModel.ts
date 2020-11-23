@@ -1,10 +1,16 @@
 import { Emitter, Event } from "./event";
+import { IDisposable } from "./lifecycle";
 import { IList } from "./list";
 
 export enum TreeVisibility {
+  /**  Hide the node */
   Hidden,
+  /** Show the node if any children are visible */
   Recurse,
+  /** Show the node */
   Visible,
+  /** Show the node and all of it's children */
+  Tree,
 }
 
 export interface ITreeNode<T> {
@@ -21,7 +27,7 @@ export interface ITreeNode<T> {
   height?: number;
 }
 
-export interface ITreeModel<T> {
+export interface ITreeModel<T> extends IDisposable {
   readonly onDidFilterChange: Event<void>;
   getNodeLocation(node: ITreeNode<T>): number[];
   splice(
@@ -48,7 +54,8 @@ export interface ITreeElement<T> {
 }
 
 interface TreeModelOptions {
-  collapseByDefault: boolean;
+  readonly collapseByDefault: boolean;
+  readonly autoExpandSingleChildren: boolean;
 }
 
 export type FilterFunction<T> = (node: T) => TreeVisibility;
@@ -91,6 +98,10 @@ export class TreeModel<T extends Exclude<any, undefined>>
       renderNodeCount: 0,
       visible: true,
     };
+  }
+
+  dispose() {
+    this._onDidFilterChange.dispose();
   }
 
   splice(
@@ -202,7 +213,15 @@ export class TreeModel<T extends Exclude<any, undefined>>
   setCollapsed(node: ITreeNode<T>, isCollapsed: boolean) {
     const location = this.getNodeLocation(node);
     const { node: _node, listIndex } = this.getTreeNodeWithListIndex(location);
-    return this._setListNodeCollapseState(_node, listIndex, isCollapsed);
+    const result = this._setListNodeCollapseState(
+      _node,
+      listIndex,
+      isCollapsed
+    );
+
+    // autoExpandSingleChildren
+
+    return result;
   }
 
   getNodeLocation(node: ITreeNode<T>): number[] {
@@ -330,6 +349,10 @@ export class TreeModel<T extends Exclude<any, undefined>>
   private _filterNode(node: ITreeNode<T>, parentVisibility: TreeVisibility) {
     let visible: TreeVisibility;
 
+    if (parentVisibility === TreeVisibility.Tree) {
+      return TreeVisibility.Tree;
+    }
+
     if (this.filter) {
       visible = this.filter(node.element);
       return visible;
@@ -344,7 +367,8 @@ export class TreeModel<T extends Exclude<any, undefined>>
   private toList(
     node: ITreeNode<T>,
     parentVisibility: TreeVisibility,
-    result: ITreeNode<T>[]
+    result: ITreeNode<T>[],
+    revealed: boolean = true
   ): boolean {
     let visibility: TreeVisibility = parentVisibility;
 
@@ -357,21 +381,22 @@ export class TreeModel<T extends Exclude<any, undefined>>
         return false;
       }
 
-      // if (revealed) {
-      result.push(node);
-      // }
+      if (revealed) {
+        result.push(node);
+      }
     }
 
     const resultStartLength = result.length;
     node.renderNodeCount = node === this.root ? 0 : 1;
 
     let hasVisibleDescendants = false;
-    if (!node.collapsed) {
+    if (!node.collapsed || visibility !== TreeVisibility.Hidden) {
       let visibleChildIndex = 0;
 
       for (const child of node.children) {
         hasVisibleDescendants =
-          this.toList(child, visibility, result) || hasVisibleDescendants;
+          this.toList(child, visibility, result, revealed && !node.collapsed) ||
+          hasVisibleDescendants;
 
         if (child.visible) {
           child.visibleChildIndex = visibleChildIndex++;
@@ -384,18 +409,22 @@ export class TreeModel<T extends Exclude<any, undefined>>
     }
 
     if (node !== this.root) {
+      // if (hasVisibleDescendants) {
+      //   node.collapsed = false;
+      // }
       node.visible =
         visibility === TreeVisibility.Recurse
           ? hasVisibleDescendants
-          : visibility! === TreeVisibility.Visible;
+          : visibility! === TreeVisibility.Visible ||
+            visibility === TreeVisibility.Tree;
     }
 
     if (!node.visible) {
       node.renderNodeCount = 0;
 
-      // if (revealed) {
-      result.pop();
-      // }
+      if (revealed) {
+        result.pop();
+      }
     } else if (!node.collapsed) {
       node.renderNodeCount += result.length - resultStartLength;
     }

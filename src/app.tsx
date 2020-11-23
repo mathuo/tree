@@ -1,10 +1,106 @@
 import * as React from "react";
 import "./app.scss";
-import { FilterFunction, ITreeElement, TreeVisibility } from "./core/treeModel";
+import {
+  FilterFunction,
+  ITreeElement,
+  ITreeModel,
+  ITreeNode,
+  TreeVisibility,
+} from "./core/treeModel";
 import { IdentityProvider } from "./core/tree";
 import { IRowProps, TreeApi, TreeReact, TreeReadyEvent } from "./tree";
 
-const Template = (props: IRowProps<Value>) => {
+const randomNumbers = (from: number, to: number, count: number) => {
+  const result = new Set<number>();
+
+  const range = to - from + 1;
+
+  while (result.size !== count) {
+    const index = Math.floor(Math.random() * range);
+    if (!result.has(index)) {
+      result.add(index);
+    }
+  }
+  return Array.from(result);
+};
+
+interface ObjectValue {
+  id: string;
+  text: string | number;
+}
+
+const createData = () => {
+  const tickers = ["F", "AMZN", "NFLX", "GOOG", "APPL"];
+  const contracts = [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+  ];
+  const prices = 5;
+
+  const data: ITreeElement<ObjectValue>[] = [];
+
+  for (let i = 0; i < tickers.length; i++) {
+    // const includeTicker = !!Math.floor(Math.random() * 2);
+    // if (!includeTicker) {
+    //   break;
+    // }
+
+    const ticker = tickers[i];
+
+    const dataNodes: ITreeElement<ObjectValue> = {
+      element: { id: ticker, text: ticker },
+      children: [],
+    };
+    data.push(dataNodes);
+
+    for (let i = 0; i < contracts.length; i++) {
+      // const includeContract = !!Math.floor(Math.random() * 2);
+      // if (!includeContract) {
+      //   break;
+      // }
+      const contract = contracts[i];
+      const contractNode: ITreeElement<ObjectValue> = {
+        element: { id: `${ticker}/${contract}`, text: contract },
+        children: [],
+      };
+      dataNodes.children?.push(contractNode);
+
+      for (let i = 0; i < prices; i++) {
+        // const includePrice = !!Math.floor(Math.random() * 2);
+        // if (!includePrice) {
+        //   break;
+        // }
+        contractNode.children?.push({
+          element: {
+            id: `${ticker}/${contract}/${i}`,
+            text: Number(
+              `${(
+                Math.random() *
+                100 *
+                (Math.floor(Math.random() * 2) ? 1 : -1)
+              ).toFixed(2)}`
+            ),
+          },
+          height: 15,
+        });
+      }
+    }
+  }
+
+  return data;
+};
+
+const Template = (props: IRowProps<ObjectValue>) => {
   const list = props.tree.list;
   const model = props.tree.model;
 
@@ -23,6 +119,16 @@ const Template = (props: IRowProps<Value>) => {
     return <div></div>;
   }
 
+  const text = node?.element?.text;
+  const color =
+    typeof text === "number"
+      ? text > 0
+        ? "rgb(2, 192, 118)"
+        : text < 0
+        ? "rgb(248, 73, 96)"
+        : ""
+      : "";
+
   return (
     <div
       onClick={onClickRow}
@@ -31,11 +137,17 @@ const Template = (props: IRowProps<Value>) => {
         alignItems: "center",
         height: "100%",
         backgroundColor: isSelected ? "rgba(30,144,255,0.3)" : "",
-        lineHeight: "25px",
       }}
     >
       <span style={{ marginLeft: `${node.depth * 16}px` }}></span>
-      <span style={{ display: "flex", flexGrow: 1, height: "100%" }}>
+      <span
+        style={{
+          display: "flex",
+          flexGrow: 1,
+          height: "100%",
+          alignItems: "center",
+        }}
+      >
         {node.children.length > 0 && (
           <span
             style={{ userSelect: "none", cursor: "pointer" }}
@@ -46,115 +158,117 @@ const Template = (props: IRowProps<Value>) => {
             </a>
           </span>
         )}
-        <span>{node?.element?.value}</span>
+        <span style={{ color }}>{node?.element?.text}</span>
       </span>
     </div>
   );
 };
 
-interface Value {
-  value: number;
-}
-
 export const App = () => {
+  const ref = React.useRef<TreeApi<ObjectValue>>();
   const [options, setOptions] = React.useState<{
-    filter: FilterFunction<Value> | undefined;
+    filter: FilterFunction<ObjectValue> | undefined;
   }>({ filter: undefined });
+  const [data, setData] = React.useState<ITreeElement<ObjectValue>[]>(
+    createData()
+  );
+  const [treeMatches, setTreeMatches] = React.useState<boolean>(true);
+  const [inputValue, setInputValue] = React.useState<string>("");
 
-  const [data, setData] = React.useState<ITreeElement<Value>[]>([
-    { element: { value: 1 } },
-    {
-      element: { value: 5 },
-      children: [
-        {
-          element: { value: 6 },
-          children: [{ element: { value: 8 } }, { element: { value: 9 } }],
-        },
-        { element: { value: 7 } },
-        { element: { value: 10 } },
-      ],
-    },
-  ]);
+  const internalSubscription = React.useRef<any>();
+  const [subscription, setSubscription] = React.useState<any>();
 
-  React.useEffect(() => {
-    setInterval(() => {
-      const random = Math.ceil(Math.random() * 10);
-      const children: ITreeElement<Value>[] = [
-        {
-          element: { value: 6 },
-          children: new Array(random).fill(0).map((_, i) => ({
-            element: { value: 999 + i },
-            height: Math.ceil(Math.random() * 3) * 22,
-          })),
-        },
-        { element: { value: 7 } },
-      ];
+  const onChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+    setInputValue(event.target.value.toLowerCase());
 
-      ref.current?.setChildren(children, "5");
-
-      // setData((_) => {
-      //   const __ = [..._] as any;
-      //   // __[1].children[0].children = new Array(random).fill(0).map((_, i) => ({
-      //   //   element: { value: 999 + i },
-      //   //   height: Math.ceil(Math.random() * 3) * 22,
-      //   // }));
-      //   __[1].children = children;
-      //   return __;
-      // });
-    }, 2000);
-  }, []);
-
-  const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setOptions({
-      filter: (element: Value) => {
-        if (
-          element?.value?.toString().toLowerCase().includes(event.target.value)
-        ) {
-          return TreeVisibility.Visible;
-        }
-        return TreeVisibility.Recurse;
-      },
-    });
-  };
-
-  const onSelectedChanged = (value: Value) => {
+  const onSelectedChanged = (value: ObjectValue) => {
     console.log("selected", value);
   };
 
-  const identityProvider: IdentityProvider<Value> = React.useMemo(
+  const onReady = (event: TreeReadyEvent<ObjectValue>) => {
+    ref.current = event.api;
+  };
+
+  const identityProvider: IdentityProvider<ObjectValue> = React.useMemo(
     () => ({
       getId: (element) => {
-        return element.value?.toString();
+        return element.id?.toString();
       },
     }),
     []
   );
 
-  const ref = React.useRef<TreeApi<Value>>();
+  React.useEffect(() => {
+    if (!subscription) {
+      clearInterval(internalSubscription.current);
+      internalSubscription.current = undefined;
+      return;
+    }
+    internalSubscription.current = setInterval(() => {
+      ref.current?.setChildren(createData());
+    }, 1000);
+  }, [subscription]);
 
-  const onReady = (event: TreeReadyEvent<Value>) => {
-    ref.current = event.api;
-  };
+  React.useEffect(() => {
+    setOptions({
+      filter: (element: ObjectValue) => {
+        if (element?.text?.toString().toLowerCase().includes(inputValue)) {
+          // return TreeVisibility.Visible;
+          return treeMatches ? TreeVisibility.Tree : TreeVisibility.Visible;
+        }
+        return TreeVisibility.Recurse;
+      },
+    });
+  }, [treeMatches, inputValue]);
+
+  const toggleKeyboard = (f: (_: (g: boolean) => boolean) => void) => (
+    ev: React.KeyboardEvent
+  ) => ev.key === "Enter" && f((_) => !_);
+
+  const toggle = (f: (_: (g: boolean) => boolean) => void) => () =>
+    f((_) => !_);
 
   return (
-    <div
-      style={{
-        backgroundColor: "rgb(30,30,30)",
-        color: "white",
-        margin: "20px",
-        width: "200px",
-        height: "600px",
-      }}
-    >
-      <input style={{ width: "100%" }} type="text" onChange={onChange} />
-      <TreeReact
-        onReady={onReady}
-        template={Template}
-        onSelectionChanged={onSelectedChanged}
-        data={data}
-        filter={options.filter}
-        identityProvider={identityProvider}
-      />
+    <div className="container">
+      <div className="tree-container">
+        <div className="settings-container">
+          <div>
+            <span>Tree matches</span>
+            <input
+              type="checkbox"
+              checked={treeMatches}
+              onChange={toggle(setTreeMatches)}
+              onKeyDown={toggleKeyboard(setTreeMatches)}
+            />
+          </div>
+
+          <div>
+            <span>Stream data</span>
+            <input
+              type="checkbox"
+              checked={subscription}
+              onChange={toggle(setSubscription)}
+              onKeyDown={toggleKeyboard(setSubscription)}
+            />
+          </div>
+          <input
+            value={inputValue}
+            style={{ width: "100%" }}
+            type="text"
+            onChange={onChange}
+            placeholder="Search"
+          />
+        </div>
+        <TreeReact
+          className={"demo-tree"}
+          onReady={onReady}
+          template={Template}
+          onSelectionChanged={onSelectedChanged}
+          data={data}
+          filter={options.filter}
+          identityProvider={identityProvider}
+        />
+      </div>
     </div>
   );
 };

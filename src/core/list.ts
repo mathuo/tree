@@ -50,4 +50,9 @@ export class List<T> implements IList<T> {
   getItem(index: number) {
     return this.list[index];
   }
+
+  dispose() {
+    this._onSplice.dispose();
+    this._onSelectionChanged.dispose();
+  }
 }

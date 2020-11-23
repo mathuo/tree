@@ -26,6 +26,10 @@ export class TreeApi<T> {
     }
 
     this.tree.setChildren(children, node?.element);
+    this.rerender();
+  }
+
+  rerender() {
     this.tree.rerender();
   }
 }
@@ -62,6 +66,7 @@ export interface ITreeReactProps<T> {
   identityProvider?: IdentityProvider<T>;
   height?: number;
   width?: number;
+  className?: string;
 }
 
 export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
@@ -113,6 +118,7 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
     }
 
     return () => {
+      tree.dispose();
       disposable.dispose();
     };
   }, []);
@@ -148,7 +154,6 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
   }, [props.template]);
 
   const onKeyDown = React.useCallback((event: React.KeyboardEvent) => {
-    event.preventDefault();
     const model = treeRef.current.model;
     const list = treeRef.current.list;
     switch (event.key) {
@@ -181,7 +186,11 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
         model.setCollapsed(node, !node.collapsed);
         break;
       }
+      default:
+        return;
     }
+
+    event.preventDefault();
   }, []);
 
   const hasDimensions = React.useMemo(
@@ -191,8 +200,9 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
 
   return (
     <div
+      className={props.className}
       style={{ outline: "none", height: "100%" }}
-      tabIndex={-1}
+      tabIndex={0}
       onKeyDown={onKeyDown}
     >
       {!hasDimensions ? (
