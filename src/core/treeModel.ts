@@ -58,7 +58,23 @@ interface TreeModelOptions {
   readonly autoExpandSingleChildren: boolean;
 }
 
+interface CollapsibleStateUpdate {
+  readonly collapsible: boolean;
+}
+interface CollapsedStateUpdate {
+  readonly collapsed: boolean;
+  readonly recursive: boolean;
+}
+
+type CollapseStateUpdate = CollapsibleStateUpdate | CollapsedStateUpdate;
+
 export type FilterFunction<T> = (node: T) => TreeVisibility;
+
+function isCollapsibleStateUpdate(
+  update: CollapseStateUpdate
+): update is CollapsibleStateUpdate {
+  return typeof (update as any).collapsible === "boolean";
+}
 
 export class TreeModel<T extends Exclude<any, undefined>>
   implements ITreeModel<T> {
@@ -210,14 +226,16 @@ export class TreeModel<T extends Exclude<any, undefined>>
     return result;
   }
 
-  setCollapsed(node: ITreeNode<T>, isCollapsed: boolean) {
+  setCollapsed(node: ITreeNode<T>, collapsed: boolean, recursive?: boolean) {
     const location = this.getNodeLocation(node);
     const { node: _node, listIndex } = this.getTreeNodeWithListIndex(location);
-    const result = this._setListNodeCollapseState(
-      _node,
-      listIndex,
-      isCollapsed
-    );
+
+    const update: CollapsedStateUpdate = {
+      collapsed,
+      recursive: recursive || false,
+    };
+
+    const result = this._setListNodeCollapseState(_node, listIndex, update);
 
     // autoExpandSingleChildren
 
@@ -257,9 +275,9 @@ export class TreeModel<T extends Exclude<any, undefined>>
   private _setListNodeCollapseState(
     node: ITreeNode<T>,
     listIndex: number,
-    isCollapsed: boolean
+    collapsedState: CollapseStateUpdate
   ) {
-    const result = this._setNodeCollapseState(node, isCollapsed);
+    const result = this._setNodeCollapseState(node, collapsedState);
 
     if (!node.visible || !result) {
       return result;
@@ -273,21 +291,32 @@ export class TreeModel<T extends Exclude<any, undefined>>
     return result;
   }
 
-  private _setNodeCollapseState(node: ITreeNode<T>, isCollapsed: boolean) {
+  private _setNodeCollapseState(
+    node: ITreeNode<T>,
+    update: CollapseStateUpdate
+  ): boolean {
     let result: boolean;
 
     if (node === this.root) {
       result = false;
     } else {
-      if (!node.collapsible) {
+      if (isCollapsibleStateUpdate(update)) {
+        result = node.collapsible !== update.collapsible;
+      } else if (!node.collapsible) {
         result = false;
       } else {
-        result = node.collapsed !== isCollapsed;
-        node.collapsed = isCollapsed;
+        result = node.collapsed !== update.collapsed;
+        node.collapsed = update.collapsed;
       }
 
       if (result) {
         // this._onDidChangeCollapseState.fire({ node, deep });
+      }
+    }
+
+    if (!isCollapsibleStateUpdate(update) && update.recursive) {
+      for (const child of node.children) {
+        result = this._setNodeCollapseState(child, update) || result;
       }
     }
 

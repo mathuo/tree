@@ -75,3 +75,18 @@ input {
     }
   }
 }
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: grey;
+}

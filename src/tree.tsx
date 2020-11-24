@@ -1,11 +1,9 @@
 import * as React from "react";
-import "./app.scss";
 import { ListChildComponentProps, VariableSizeList } from "react-window";
+import AutoSizer from "react-virtualized-auto-sizer";
 import { CompositeDisposable } from "./core/lifecycle";
 import { IdentityProvider, ITree, Tree } from "./core/tree";
 import { ITreeElement, FilterFunction, ITreeNode } from "./core/treeModel";
-
-import AutoSizer from "react-virtualized-auto-sizer";
 
 const DEFAULT_HEIGHT = 22;
 
@@ -41,6 +39,9 @@ export interface TreeReadyEvent<T> {
 export interface IRowProps<T> {
   tree: Readonly<Tree<T>>;
   index: number;
+  selectRow(): void;
+  isSelected: boolean;
+  node: Readonly<ITreeNode<T>>;
 }
 
 const Row = <T,>(props: ListChildComponentProps) => {
@@ -49,9 +50,21 @@ const Row = <T,>(props: ListChildComponentProps) => {
     template: React.FunctionComponent<IRowProps<T>>;
   };
 
+  const { list, model } = tree;
+
+  const node = list.getItem(props.index);
+  const isSelected = list.isSelected(props.index);
+  const selectRow = () => list.setSelected(props.index);
+
   return (
     <div style={{ ...props.style, overflow: "hidden" }}>
-      {React.createElement(template, { tree, index: props.index })}
+      {React.createElement(template, {
+        tree,
+        index: props.index,
+        isSelected,
+        selectRow,
+        node,
+      })}
     </div>
   );
 };
@@ -201,7 +214,12 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
   return (
     <div
       className={props.className}
-      style={{ outline: "none", height: "100%" }}
+      style={{
+        outline: "none",
+        height: "100%",
+        position: "relative",
+        flex: "1 1 auto",
+      }}
       tabIndex={0}
       onKeyDown={onKeyDown}
     >

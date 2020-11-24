@@ -104,15 +104,10 @@ const Template = (props: IRowProps<ObjectValue>) => {
   const list = props.tree.list;
   const model = props.tree.model;
 
-  const node = list.getItem(props.index);
-  const isSelected = list.isSelected(props.index);
+  const node = props.node;
 
   const onClick = () => {
     model.setCollapsed(node, !node.collapsed);
-  };
-
-  const onClickRow = () => {
-    list.setSelected(props.index);
   };
 
   if (!node) {
@@ -131,12 +126,12 @@ const Template = (props: IRowProps<ObjectValue>) => {
 
   return (
     <div
-      onClick={onClickRow}
+      onClick={props.selectRow}
       style={{
         display: "flex",
         alignItems: "center",
         height: "100%",
-        backgroundColor: isSelected ? "rgba(30,144,255,0.3)" : "",
+        backgroundColor: props.isSelected ? "rgba(30,144,255,0.3)" : "",
       }}
     >
       <span style={{ marginLeft: `${node.depth * 16}px` }}></span>
@@ -148,7 +143,7 @@ const Template = (props: IRowProps<ObjectValue>) => {
           alignItems: "center",
         }}
       >
-        {node.children.length > 0 && (
+        {node.collapsible && (
           <span
             style={{ userSelect: "none", cursor: "pointer" }}
             onClick={onClick}
