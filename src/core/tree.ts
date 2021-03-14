@@ -55,11 +55,14 @@ export class Tree<T extends Exclude<any, undefined>> implements ITree<T> {
     return this.nodesByIdentity.get(id) as ITreeNode<T>;
   }
 
-  constructor(options: { identity?: IdentityProvider<T> }) {
+  constructor(options: {
+    identity?: IdentityProvider<T>;
+    collapseByDefault: boolean;
+  }) {
     this.identityProvider = options?.identity;
     this._list = new List();
     this._model = new TreeModel(this._list, null, {
-      collapseByDefault: false,
+      collapseByDefault: options.collapseByDefault,
       autoExpandSingleChildren: true,
     });
 

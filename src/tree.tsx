@@ -36,18 +36,20 @@ export interface TreeReadyEvent<T> {
   api: TreeApi<T>;
 }
 
-export interface IRowProps<T> {
+export interface IRowProps<T, C = any> {
   tree: Readonly<Tree<T>>;
   index: number;
   selectRow(): void;
   isSelected: boolean;
   node: Readonly<ITreeNode<T>>;
+  context?: C;
 }
 
-const Row = <T,>(props: ListChildComponentProps) => {
-  const { tree, template } = props.data as {
+const Row = <T, C>(props: ListChildComponentProps) => {
+  const { tree, template, context } = props.data as {
     tree: Tree<T>;
-    template: React.FunctionComponent<IRowProps<T>>;
+    template: React.FunctionComponent<IRowProps<T, C>>;
+    context?: C;
   };
 
   const { list, model } = tree;
@@ -56,22 +58,41 @@ const Row = <T,>(props: ListChildComponentProps) => {
   const isSelected = list.isSelected(props.index);
   const selectRow = () => list.setSelected(props.index);
 
+  const cn = React.useMemo(() => {
+    const result: string[] = ["tree-node"];
+
+    if (isSelected) {
+      result.push("selected");
+    }
+    if (node.collapsible) {
+      result.push("expandable");
+      if (!node.collapsed) {
+        result.push("expanded");
+      }
+    }
+    return result.join(" ");
+  }, [isSelected, node.collapsible]);
+
   return (
-    <div style={{ ...props.style, overflow: "hidden" }}>
+    <div
+      className={cn}
+      style={{ ...props.style, overflow: "hidden", boxSizing: "border-box" }}
+    >
       {React.createElement(template, {
         tree,
         index: props.index,
         isSelected,
         selectRow,
         node,
+        context,
       })}
     </div>
   );
 };
 
-export interface ITreeReactProps<T> {
+export interface ITreeReactProps<T, C> {
   data: ITreeElement<T>[];
-  template: React.FunctionComponent<IRowProps<T>>;
+  template: React.FunctionComponent<IRowProps<T, C>>;
   onReady?(event: TreeReadyEvent<T>): void;
   rowHeight?: number;
   filter?: FilterFunction<T> | undefined;
@@ -80,14 +101,41 @@ export interface ITreeReactProps<T> {
   height?: number;
   width?: number;
   className?: string;
+  expandByDefault?: boolean;
+  context?: C;
+  onListHeightChanged?: (height: number) => void;
+  autoFocus?: boolean;
 }
 
-export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
+export const TreeReact = <T, C>(props: ITreeReactProps<T, C>) => {
   const [length, setLength] = React.useState<number>(0);
   const listRef = React.useRef<VariableSizeListApi>();
   const treeRef = React.useRef<ITree<T>>(
-    new Tree<T>({ identity: props.identityProvider })
+    new Tree<T>({
+      identity: props.identityProvider,
+      collapseByDefault:
+        typeof props.expandByDefault === "boolean"
+          ? !props.expandByDefault
+          : true,
+    })
   );
+
+  React.useEffect(() => {
+    if (!props.onListHeightChanged) {
+      return;
+    }
+    let height = 0;
+    const tree = treeRef.current;
+    for (let i = 0; i < tree.list.length; i++) {
+      const node = tree.list.getItem(i);
+      if (typeof node.height === "number") {
+        height += node.height;
+      } else {
+        height += DEFAULT_HEIGHT;
+      }
+    }
+    props.onListHeightChanged(height);
+  }, [length, props.onListHeightChanged]);
 
   React.useEffect(() => {
     const tree = treeRef.current;
@@ -163,6 +211,7 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
     return {
       tree: treeRef.current,
       template: props.template,
+      context: props.context,
     };
   }, [props.template]);
 
@@ -211,8 +260,17 @@ export const TreeReact = <T,>(props: ITreeReactProps<T>) => {
     [props.height, props.width]
   );
 
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (props.autoFocus) {
+      ref.current?.focus();
+    }
+  }, []);
+
   return (
     <div
+      ref={ref}
       className={props.className}
       style={{
         outline: "none",
